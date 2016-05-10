@@ -25,6 +25,7 @@ type alias Model =
 -- We have the messages that can occur
 type Msg
   = Add
+  | Clear
   | Complete Todo
   | Uncomplete Todo
   | Delete Todo
@@ -75,6 +76,10 @@ update msg model =
       | todos = model.todo :: model.todos
       , todo = { newTodo | identifier = model.nextIdentifier }
       , nextIdentifier = model.nextIdentifier + 1
+      }
+    Clear ->
+      {model
+      | todos = List.filter (\todo -> todo.completed == False) model.todos
       }
     Complete todo ->
       let
@@ -183,7 +188,10 @@ view model =
         , filterItemView model Active
         , filterItemView model Completed
         ]
-      , button [class "clear-completed"] [text "Clear completed"]
+      , button
+        [ class "clear-completed"
+        , onClick Clear
+        ] [text "Clear completed"]
       ]
     ]
   ]
