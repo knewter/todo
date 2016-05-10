@@ -5,9 +5,10 @@ import Html.Events exposing (..)
 import Json.Decode as Json
 
 type alias Todo =
-  { title     : String
-  , completed : Bool
-  , editing   : Bool
+  { title      : String
+  , completed  : Bool
+  , editing    : Bool
+  , identifier : Int
   }
 
 -- We have the filter state for the application
@@ -18,12 +19,14 @@ type alias Model =
   { todos  : List Todo
   , todo   : Todo
   , filter : FilterState
+  , nextIdentifier : Int
   }
 
 -- We have the messages that can occur
 type Msg
   = Add
   | Complete Todo
+  | Uncomplete Todo
   | Delete Todo
   | UpdateField String
   | Filter FilterState
@@ -34,6 +37,7 @@ newTodo =
   { title = ""
   , completed = False
   , editing = False
+  , identifier = 0
   }
 
 
@@ -44,18 +48,12 @@ initialModel =
       { title = "The first todo"
       , completed = False
       , editing = False
+      , identifier = 1
       }
     ]
-  , todo = newTodo
+  , todo = { newTodo | identifier = 2 }
   , filter = All
-  }
-
-
-mockTodo : Todo
-mockTodo =
-  { title = "A mock todo..."
-  , completed = False
-  , editing = False
+  , nextIdentifier = 3
   }
 
 
@@ -76,9 +74,30 @@ update msg model =
       { model
       | todos = model.todo :: model.todos
       , todo = newTodo
+      , nextIdentifier = model.nextIdentifier + 1
       }
     Complete todo ->
-      model
+      let
+        updateTodo thisTodo =
+          if thisTodo.identifier == todo.identifier then
+            { todo | completed = True }
+          else
+            thisTodo
+      in
+        {model
+        | todos = List.map updateTodo model.todos
+        }
+    Uncomplete todo ->
+      let
+        updateTodo thisTodo =
+          if thisTodo.identifier == todo.identifier then
+            { todo | completed = False }
+          else
+            thisTodo
+      in
+        {model
+        | todos = List.map updateTodo model.todos
+        }
     Delete todo ->
       model
     Filter filterState ->
@@ -93,11 +112,22 @@ update msg model =
 
 todoView : Todo -> Html Msg
 todoView todo =
+  let
+    handleComplete =
+      case todo.completed of
+        True -> (\_ -> Uncomplete todo)
+        False -> (\_ -> Complete todo)
+  in
   -- We will give the li the class "completed" if the todo is completed
   li [classList [ ("completed", todo.completed) ] ]
   [ div [class "view"]
     -- We will check the checkbox if the todo is completed
-    [ input [class "toggle", type' "checkbox", checked todo.completed] []
+    [ input
+      [ class "toggle"
+      , type' "checkbox"
+      , checked todo.completed
+      , onCheck handleComplete
+      ] []
     -- We will use the todo's title as the label text
     , label [] [text todo.title]
     , button [class "destroy"] []
