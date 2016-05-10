@@ -73,7 +73,7 @@ update msg model =
     Add ->
       { model
       | todos = model.todo :: model.todos
-      , todo = newTodo
+      , todo = { newTodo | identifier = model.nextIdentifier }
       , nextIdentifier = model.nextIdentifier + 1
       }
     Complete todo ->
@@ -101,7 +101,7 @@ update msg model =
     Delete todo ->
       model
     Filter filterState ->
-      model
+      { model | filter = filterState }
     UpdateField str ->
       let
         todo = model.todo
@@ -135,6 +135,21 @@ todoView todo =
   ]
 
 
+filteredTodos : Model -> List Todo
+filteredTodos model =
+  let
+    matchesFilter =
+      case model.filter of
+        All ->
+          (\_ -> True)
+        Active ->
+          (\todo -> todo.completed == False)
+        Completed ->
+          (\todo -> todo.completed == True)
+  in
+    List.filter matchesFilter model.todos
+
+
 view : Model -> Html Msg
 view model =
   div []
@@ -153,10 +168,35 @@ view model =
       ]
     , section [class "main"]
       [ ul [class "todo-list"]
-        (List.map todoView model.todos)
+        (List.map todoView (filteredTodos model))
+      ]
+    , footer [class "footer"]
+      [ span [class "todo-count"]
+        [ strong [] [ text (toString (List.length (List.filter (\todo -> todo.completed == False) model.todos))) ]
+        , text " items left"
+        ]
+      , ul [class "filters"]
+        [ filterItemView model All
+        , filterItemView model Active
+        , filterItemView model Completed
+        ]
+      , button [class "clear-completed"] [text "Clear completed"]
       ]
     ]
   ]
+
+
+filterItemView : Model -> FilterState -> Html Msg
+filterItemView model filterState =
+  li []
+  [ a
+    [ classList [("selected", (model.filter == filterState) )]
+    , href "#"
+    , onClick (Filter filterState)
+    ]
+    [text (toString filterState)]
+  ]
+
 
 main =
   Html.beginnerProgram
