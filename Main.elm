@@ -29,6 +29,14 @@ type Msg
   | Filter FilterState
 
 
+newTodo : Todo
+newTodo =
+  { title = ""
+  , completed = False
+  , editing = False
+  }
+
+
 initialModel : Model
 initialModel =
   { todos =
@@ -38,10 +46,7 @@ initialModel =
       , editing = False
       }
     ]
-  , todo = { title = ""
-           , completed = False
-           , editing = False
-           }
+  , todo = newTodo
   , filter = All
   }
 
@@ -68,14 +73,10 @@ update : Msg -> Model -> Model
 update msg model =
   case msg of
     Add ->
-      let
-        newTodo =
-          { title = ""
-          , completed = False
-          , editing = False
-          }
-      in
-        {model | todos = model.todo :: model.todos, todo = newTodo}
+      { model
+      | todos = model.todo :: model.todos
+      , todo = newTodo
+      }
     Complete todo ->
       model
     Delete todo ->
@@ -85,9 +86,9 @@ update msg model =
     UpdateField str ->
       let
         todo = model.todo
-        newTodo = { todo | title = str }
+        updatedTodo = { todo | title = str }
       in
-        { model | todo = newTodo }
+        { model | todo = updatedTodo }
 
 
 todoView : Todo -> Html Msg
