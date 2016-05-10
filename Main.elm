@@ -1,6 +1,8 @@
 import Html exposing (..)
 import Html.App as Html
 import Html.Attributes exposing (..)
+import Html.Events exposing (..)
+import Json.Decode as Json
 
 type alias Todo =
   { title     : String
@@ -26,6 +28,7 @@ type Msg
   | Filter FilterState
 
 
+initialModel : Model
 initialModel =
   { todos =
     [
@@ -42,9 +45,35 @@ initialModel =
   }
 
 
+mockTodo : Todo
+mockTodo =
+  { title = "A mock todo..."
+  , completed = False
+  , editing = False
+  }
+
+
+handleKeyPress : Json.Decoder Msg
+handleKeyPress =
+  Json.map (always (Add mockTodo)) (Json.customDecoder keyCode is13)
+
+
+is13 : Int -> Result String ()
+is13 code =
+  if code == 13 then Ok () else Err "not the right key code"
+
+
 update : Msg -> Model -> Model
 update msg model =
-  model
+  case msg of
+    Add todo ->
+      {model | todos = todo :: model.todos}
+    Complete todo ->
+      model
+    Delete todo ->
+      model
+    Filter filterState ->
+      model
 
 
 todoView : Todo -> Html Msg
@@ -68,7 +97,13 @@ view model =
   , section [class "todoapp"]
     [ header [class "header"]
       [ h1 [] [text "todos"]
-      , input [class "new-todo", placeholder "What needs to be done?", autofocus True] []
+      , input
+        [class "new-todo"
+        , placeholder "What needs to be done?"
+        , autofocus True
+        , value model.todo.title
+        , on "keypress" handleKeyPress
+        ] []
       ]
     , section [class "main"]
       [ ul [class "todo-list"]
