@@ -22,9 +22,10 @@ type alias Model =
 
 -- We have the messages that can occur
 type Msg
-  = Add Todo
+  = Add
   | Complete Todo
   | Delete Todo
+  | UpdateField String
   | Filter FilterState
 
 
@@ -55,7 +56,7 @@ mockTodo =
 
 handleKeyPress : Json.Decoder Msg
 handleKeyPress =
-  Json.map (always (Add mockTodo)) (Json.customDecoder keyCode is13)
+  Json.map (always Add) (Json.customDecoder keyCode is13)
 
 
 is13 : Int -> Result String ()
@@ -66,14 +67,27 @@ is13 code =
 update : Msg -> Model -> Model
 update msg model =
   case msg of
-    Add todo ->
-      {model | todos = todo :: model.todos}
+    Add ->
+      let
+        newTodo =
+          { title = ""
+          , completed = False
+          , editing = False
+          }
+      in
+        {model | todos = model.todo :: model.todos, todo = newTodo}
     Complete todo ->
       model
     Delete todo ->
       model
     Filter filterState ->
       model
+    UpdateField str ->
+      let
+        todo = model.todo
+        newTodo = { todo | title = str }
+      in
+        { model | todo = newTodo }
 
 
 todoView : Todo -> Html Msg
@@ -103,6 +117,7 @@ view model =
         , autofocus True
         , value model.todo.title
         , on "keypress" handleKeyPress
+        , onInput UpdateField
         ] []
       ]
     , section [class "main"]
