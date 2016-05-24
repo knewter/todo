@@ -1,3 +1,5 @@
+port module Main exposing (..)
+
 import Html exposing (..)
 import Html.App as Html
 import Html.Attributes exposing (..)
@@ -68,7 +70,7 @@ is13 code =
   if code == 13 then Ok () else Err "not the right key code"
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     Add ->
@@ -76,11 +78,11 @@ update msg model =
       | todos = model.todo :: model.todos
       , todo = { newTodo | identifier = model.nextIdentifier }
       , nextIdentifier = model.nextIdentifier + 1
-      }
+      } ! []
     Clear ->
       {model
       | todos = List.filter (\todo -> todo.completed == False) model.todos
-      }
+      } ! []
     Complete todo ->
       let
         updateTodo thisTodo =
@@ -91,7 +93,7 @@ update msg model =
       in
         {model
         | todos = List.map updateTodo model.todos
-        }
+        } ! []
     Uncomplete todo ->
       let
         updateTodo thisTodo =
@@ -102,17 +104,17 @@ update msg model =
       in
         {model
         | todos = List.map updateTodo model.todos
-        }
+        } ! []
     Delete todo ->
-      { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos }
+      { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos } ! []
     Filter filterState ->
-      { model | filter = filterState }
+      { model | filter = filterState } ! []
     UpdateField str ->
       let
         todo = model.todo
         updatedTodo = { todo | title = str }
       in
-        { model | todo = updatedTodo }
+        { model | todo = updatedTodo } ! []
 
 
 todoView : Todo -> Html Msg
@@ -210,11 +212,22 @@ filterItemView model filterState =
 
 
 main =
-  Html.beginnerProgram
-    { model = initialModel
+  Html.program
+    { init = (initialModel, Cmd.none)
     , update = update
     , view = view
+    , subscriptions = subscriptions
     }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+  storageInput
+
+
+port storageInput : (Model -> msg) -> Sub msg
+
+port storage : Model -> Cmd msg
 
 
 styles : String
