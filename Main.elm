@@ -4,7 +4,8 @@ import Html exposing (..)
 import Html.App as Html
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
-import Json.Decode as Json
+import Json.Decode exposing ((:=))
+import Json.Encode
 
 type alias Todo =
   { title      : String
@@ -34,6 +35,7 @@ type Msg
   | UpdateField String
   | Filter FilterState
   | SetModel Model
+  | NoOp
 
 
 newTodo : Todo
@@ -61,9 +63,9 @@ initialModel =
   }
 
 
-handleKeyPress : Json.Decoder Msg
+handleKeyPress : Json.Decode.Decoder Msg
 handleKeyPress =
-  Json.map (always Add) (Json.customDecoder keyCode is13)
+  Json.Decode.map (always Add) (Json.Decode.customDecoder keyCode is13)
 
 
 is13 : Int -> Result String ()
@@ -75,15 +77,23 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     Add ->
-      { model
-      | todos = model.todo :: model.todos
-      , todo = { newTodo | identifier = model.nextIdentifier }
-      , nextIdentifier = model.nextIdentifier + 1
-      } ! []
+      let
+        newModel =
+          { model
+          | todos = model.todo :: model.todos
+          , todo = { newTodo | identifier = model.nextIdentifier }
+          , nextIdentifier = model.nextIdentifier + 1
+          }
+      in
+         (newModel, sendToStorage newModel)
     Clear ->
-      {model
-      | todos = List.filter (\todo -> todo.completed == False) model.todos
-      } ! []
+      let
+        newModel =
+          {model
+          | todos = List.filter (\todo -> todo.completed == False) model.todos
+          }
+      in
+        (newModel, sendToStorage newModel)
     Complete todo ->
       let
         updateTodo thisTodo =
@@ -91,10 +101,12 @@ update msg model =
             { todo | completed = True }
           else
             thisTodo
+        newModel =
+          {model
+          | todos = List.map updateTodo model.todos
+          }
       in
-        {model
-        | todos = List.map updateTodo model.todos
-        } ! []
+        (newModel, sendToStorage newModel)
     Uncomplete todo ->
       let
         updateTodo thisTodo =
@@ -102,22 +114,37 @@ update msg model =
             { todo | completed = False }
           else
             thisTodo
+        newModel =
+          {model
+          | todos = List.map updateTodo model.todos
+          }
       in
-        {model
-        | todos = List.map updateTodo model.todos
-        } ! []
+        (newModel, sendToStorage newModel)
     Delete todo ->
-      { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos } ! []
+      let
+        newModel =
+          { model
+          | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos
+          }
+      in
+        (newModel, sendToStorage newModel)
     Filter filterState ->
-      { model | filter = filterState } ! []
+      let
+        newModel =
+          { model | filter = filterState }
+      in
+        (newModel, sendToStorage newModel)
     UpdateField str ->
       let
         todo = model.todo
         updatedTodo = { todo | title = str }
+        newModel = { model | todo = updatedTodo }
       in
-        { model | todo = updatedTodo } ! []
+        (newModel, sendToStorage newModel)
     SetModel newModel ->
       newModel ! []
+    NoOp ->
+      model ! []
 
 
 todoView : Todo -> Html Msg
@@ -225,12 +252,116 @@ main =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  storageInput
+  storageInput mapStorageInput
 
 
-port storageInput : (Model -> msg) -> Sub msg
+mapStorageInput : Json.Decode.Value -> Msg
+mapStorageInput modelJson =
+  case (decodeModel modelJson) of
+    Ok model -> SetModel model
+    _ -> NoOp
 
-port storage : Model -> Cmd msg
+
+-- The actual Decode function takes the modelJson and returns a result.  Here we
+-- invoke the `decodeValue` function, where the first argument is a Decoder and
+-- the second is the JSON string we're decoding
+decodeModel : Json.Decode.Value -> Result String Model
+decodeModel modelJson =
+  Json.Decode.decodeValue modelDecoder modelJson
+
+
+-- This brings us to the Decoder.  This returns a Decoder for a Model.  It uses
+-- the `object4` function, which just decodes an object with 4 keys in it.  We
+-- tell it to produce a Model, and then we describe the mapping for each of the
+-- fields.  The first argument is actually a function that should take 4
+-- arguments - in this case, it's the `Model` constructor function that the
+-- record alias type produces for us, but it could be any 4-arity function.
+modelDecoder : Json.Decode.Decoder Model
+modelDecoder =
+  Json.Decode.object4 Model
+    -- For todos, we return a list passed through a new todoDecoder
+    ("todos"  := Json.Decode.list todoDecoder)
+    -- The active todo also goes through the todoDecoder
+    ("todo"   := todoDecoder)
+    -- The filter goes through a decoder that turns our stringified filter into
+    -- a member of the union type
+    ("filter" := filterStateDecoder)
+    -- Then nextIdentifier just uses the builtin int decoder
+    ("nextIdentifier" := Json.Decode.int)
+
+
+-- Our todoDecoder is another `object4` for a Todo data structure.
+todoDecoder : Json.Decode.Decoder Todo
+todoDecoder =
+  Json.Decode.object4 Todo
+    -- Our title is a string
+    ("title" := Json.Decode.string)
+    -- completed is a bool
+    ("completed" := Json.Decode.bool)
+    -- editing is a bool
+    ("editing" := Json.Decode.bool)
+    -- and identifier is an int
+    ("identifier" := Json.Decode.int)
+
+
+-- Now all that's left is the filterStateDecoder.  For this we have to break out
+-- a customDecoder, because there's no other straightforard way to provide
+-- switching on a case statement.
+-- We simply provide a function that takes our stringified version, and then we
+-- decode the field as a string and pass it through our custom function.
+filterStateDecoder : Json.Decode.Decoder FilterState
+filterStateDecoder =
+  let
+    decodeToFilterState string =
+      case string of
+        "All" -> Result.Ok All
+        "Active" -> Result.Ok Active
+        "Completed" -> Result.Ok Completed
+        _ -> Result.Err ("Not a valid filterState: " ++ string)
+  in
+    Json.Decode.customDecoder Json.Decode.string decodeToFilterState
+
+
+
+sendToStorage : Model -> Cmd Msg
+sendToStorage model =
+  encodeJson model |> storage
+
+
+encodeJson : Model -> Json.Encode.Value
+encodeJson model =
+  Json.Encode.object
+    [ ("todos", Json.Encode.list (List.map encodeTodo model.todos))
+    , ("todo", encodeTodo model.todo)
+    , ("filter", encodeFilterState model.filter)
+    , ("nextIdentifier", Json.Encode.int model.nextIdentifier)
+    ]
+
+
+encodeTodo : Todo -> Json.Encode.Value
+encodeTodo todo =
+  Json.Encode.object
+    [ ("title", Json.Encode.string todo.title)
+    , ("completed", Json.Encode.bool todo.completed)
+    , ("editing", Json.Encode.bool todo.editing)
+    , ("identifier", Json.Encode.int todo.identifier)
+    ]
+
+
+-- The FilterState encoder takes a FilterState and returns a Json.Encode.Value
+encodeFilterState : FilterState -> Json.Encode.Value
+encodeFilterState filterState =
+  -- We'll just have a case statement to turn these into strings.
+  case filterState of
+    All       -> Json.Encode.string "All"
+    Active    -> Json.Encode.string "Active"
+    Completed -> Json.Encode.string "Completed"
+  -- We could just as easily have used toString here...not sure why I don't.
+
+
+port storageInput : (Json.Decode.Value -> msg) -> Sub msg
+
+port storage : Json.Encode.Value -> Cmd msg
 
 
 styles : String
