@@ -2,6 +2,8 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (on, keyCode)
+import Json.Decode as Json
 
 
 type alias Todo =
@@ -48,9 +50,28 @@ initialModel =
     }
 
 
+mockTodo : Todo
+mockTodo =
+    { title = "A mock todo..."
+    , completed = False
+    , editing = False
+    }
+
+
 update : Msg -> Model -> Model
 update msg model =
-    model
+    case msg of
+        Add todo ->
+            { model | todos = todo :: model.todos }
+
+        Complete todo ->
+            model
+
+        Delete todo ->
+            model
+
+        Filter filterState ->
+            model
 
 
 todoView : Todo -> Html Msg
@@ -67,6 +88,18 @@ todoView todo =
         ]
 
 
+onEnter : Msg -> Attribute Msg
+onEnter msg =
+    let
+        isEnter code =
+            if code == 13 then
+                Json.succeed msg
+            else
+                Json.fail "not the right keycode"
+    in
+        on "keydown" (keyCode |> Json.andThen isEnter)
+
+
 view : Model -> Html Msg
 view model =
     div []
@@ -74,7 +107,15 @@ view model =
         , section [ class "todoapp" ]
             [ header [ class "header" ]
                 [ h1 [] [ text "todos" ]
-                , input [ class "new-todo", placeholder "What needs to be done?", autofocus True ] []
+                , input
+                    [ class "new-todo"
+                    , placeholder "What needs to be done?"
+                      -- We'll explicitly set the value to the model's todo's title
+                    , value model.todo.title
+                    , autofocus True
+                    , onEnter (Add mockTodo)
+                    ]
+                    []
                 ]
             , section [ class "main" ]
                 [ ul [ class "todo-list" ]
