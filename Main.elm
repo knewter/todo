@@ -66,7 +66,7 @@ update msg model =
         Add ->
             { model
                 | todos = model.todo :: model.todos
-                , todo = newTodo
+                , todo = { newTodo | identifier = model.nextIdentifier }
                 , nextIdentifier = model.nextIdentifier + 1
             }
 
