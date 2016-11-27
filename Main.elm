@@ -2,7 +2,7 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (on, keyCode, onInput)
+import Html.Events exposing (on, keyCode, onInput, onCheck)
 import Json.Decode as Json
 
 
@@ -10,6 +10,7 @@ type alias Todo =
     { title : String
     , completed : Bool
     , editing : Bool
+    , identifier : Int
     }
 
 
@@ -23,6 +24,7 @@ type alias Model =
     { todos : List Todo
     , todo : Todo
     , filter : FilterState
+    , nextIdentifier : Int
     }
 
 
@@ -40,18 +42,12 @@ initialModel =
         [ { title = "The first todo"
           , completed = False
           , editing = False
+          , identifier = 1
           }
         ]
-    , todo = newTodo
+    , todo = { newTodo | identifier = 2 }
     , filter = All
-    }
-
-
-mockTodo : Todo
-mockTodo =
-    { title = "A mock todo..."
-    , completed = False
-    , editing = False
+    , nextIdentifier = 3
     }
 
 
@@ -60,6 +56,7 @@ newTodo =
     { title = ""
     , completed = False
     , editing = False
+    , identifier = 0
     }
 
 
@@ -70,10 +67,20 @@ update msg model =
             { model
                 | todos = model.todo :: model.todos
                 , todo = newTodo
+                , nextIdentifier = model.nextIdentifier + 1
             }
 
         Complete todo ->
-            model
+            let
+                updateTodo thisTodo =
+                    if thisTodo.identifier == todo.identifier then
+                        { todo | completed = True }
+                    else
+                        thisTodo
+            in
+                { model
+                    | todos = List.map updateTodo model.todos
+                }
 
         Delete todo ->
             model
@@ -94,12 +101,15 @@ update msg model =
 
 todoView : Todo -> Html Msg
 todoView todo =
-    -- We will give the li the class "completed" if the todo is completed
     li [ classList [ ( "completed", todo.completed ) ] ]
         [ div [ class "view" ]
-            -- We will check the checkbox if the todo is completed
-            [ input [ class "toggle", type_ "checkbox", checked todo.completed ] []
-              -- We will use the todo's title as the label text
+            [ input
+                [ class "toggle"
+                , type_ "checkbox"
+                , checked todo.completed
+                , onCheck (\_ -> Complete todo)
+                ]
+                []
             , label [] [ text todo.title ]
             , button [ class "destroy" ] []
             ]
