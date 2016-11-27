@@ -83,7 +83,7 @@ update msg model =
                 }
 
         Delete todo ->
-            model
+            { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos }
 
         UpdateField str ->
             let
@@ -111,7 +111,11 @@ todoView todo =
                 ]
                 []
             , label [] [ text todo.title ]
-            , button [ class "destroy" ] []
+            , button
+                [ class "destroy"
+                , onClick (Delete todo)
+                ]
+                []
             ]
         ]
 
