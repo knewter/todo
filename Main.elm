@@ -1,7 +1,8 @@
 port module Main exposing (..)
 
 import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, autofocus, placeholder, classList, checked, href, rel, type_, value)
+import Json.Decode.Pipeline exposing (decode, required)
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
 import Json.Decode as Decode
 import Json.Encode
@@ -352,28 +353,20 @@ decodeModel modelJson =
 
 modelDecoder : Decode.Decoder Model
 modelDecoder =
-    Decode.map4 Model
-        -- For todos, we return a list passed through a new todoDecoder
-        (Decode.field "todos" (Decode.list todoDecoder))
-        -- The active todo also goes through the todoDecoder
-        (Decode.field "todo" todoDecoder)
-        -- The filter gets decoded as a string, then mapped to a FilterState
-        (Decode.field "filter" (Decode.string |> Decode.map filterStateDecoder))
-        -- Then nextIdentifier just uses the builtin int decoder
-        (Decode.field "nextIdentifier" Decode.int)
+    decode Model
+        |> required "todos" (Decode.list todoDecoder)
+        |> required "todo" todoDecoder
+        |> required "filter" (Decode.string |> Decode.map filterStateDecoder)
+        |> required "nextIdentifier" Decode.int
 
 
 todoDecoder : Decode.Decoder Todo
 todoDecoder =
-    Decode.map4 Todo
-        -- Our title is a string
-        (Decode.field "title" Decode.string)
-        -- completed is a bool
-        (Decode.field "completed" Decode.bool)
-        -- editing is a bool
-        (Decode.field "editing" Decode.bool)
-        -- and identifier is an int
-        (Decode.field "identifier" Decode.int)
+    decode Todo
+        |> required "title" Decode.string
+        |> required "completed" Decode.bool
+        |> required "editing" Decode.bool
+        |> required "identifier" Decode.int
 
 
 filterStateDecoder : String -> FilterState
