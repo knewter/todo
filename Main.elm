@@ -3,7 +3,7 @@ port module Main exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
-import Json.Decode as Json
+import Json.Decode as Decode
 
 
 type alias Todo =
@@ -175,11 +175,11 @@ onEnter msg =
     let
         isEnter code =
             if code == 13 then
-                Json.succeed msg
+                Decode.succeed msg
             else
-                Json.fail "not the right keycode"
+                Decode.fail "not the right keycode"
     in
-        on "keydown" (keyCode |> Json.andThen isEnter)
+        on "keydown" (keyCode |> Decode.andThen isEnter)
 
 
 filterItemView : Model -> FilterState -> Html Msg
@@ -264,7 +264,7 @@ view model =
 
 main =
     Html.program
-        { model = initialModel
+        { init = ( initialModel, Cmd.none )
         , update = update
         , view = view
         , subscriptions = subscriptions
