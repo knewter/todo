@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -18,6 +18,7 @@ type FilterState
     = All
     | Active
     | Completed
+    | SetModel Model
 
 
 type alias Model =
@@ -65,11 +66,17 @@ update : Msg -> Model -> Model
 update msg model =
     case msg of
         Add ->
-            { model
-                | todos = model.todo :: model.todos
-                , todo = { newTodo | identifier = model.nextIdentifier }
-                , nextIdentifier = model.nextIdentifier + 1
-            }
+            let
+                newModel =
+                    { model
+                        | todos = model.todo :: model.todos
+                        , todo = { newTodo | identifier = model.nextIdentifier }
+                        , nextIdentifier = model.nextIdentifier + 1
+                    }
+            in
+                ( newModel
+                , storage newModel
+                )
 
         Complete todo ->
             let
@@ -78,13 +85,24 @@ update msg model =
                         { todo | completed = True }
                     else
                         thisTodo
+
+                newModel =
+                    { model
+                        | todos = List.map updateTodo model.todos
+                    }
             in
-                { model
-                    | todos = List.map updateTodo model.todos
-                }
+                ( newModel
+                , storage newModel
+                )
 
         Delete todo ->
-            { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos }
+            let
+                newModel =
+                    { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos }
+            in
+                ( newModel
+                , storage newModel
+                )
 
         UpdateField str ->
             let
@@ -93,22 +111,48 @@ update msg model =
 
                 updatedTodo =
                     { todo | title = str }
+
+                newModel =
+                    { model | todo = updatedTodo }
             in
-                { model | todo = updatedTodo }
+                ( newModel
+                , storage newModel
+                )
 
         Filter filterState ->
-            { model | filter = filterState }
+            let
+                newModel =
+                    { model | filter = filterState }
+            in
+                ( newModel
+                , storage newModel
+                )
 
         Clear ->
-            { model
-                | todos = List.filter (\todo -> todo.completed == False) model.todos
-            }
+            let
+                newModel =
+                    { model
+                        | todos = List.filter (\todo -> todo.completed == False) model.todos
+                    }
+            in
+                ( newModel
+                , storage newModel
+                )
+
+        SetModel model ->
+            ( model
+            , Cmd.none
+            )
 
 
 todoView : Todo -> Html Msg
 todoView todo =
-    li [ classList [ ( "completed", todo.completed ) ] ]
-        [ div [ class "view" ]
+    li
+        [ classList
+            [ ( "completed", todo.completed ) ]
+        ]
+        [ div
+            [ class "view" ]
             [ input
                 [ class "toggle"
                 , type_ "checkbox"
@@ -142,7 +186,8 @@ filterItemView : Model -> FilterState -> Html Msg
 filterItemView model filterState =
     li []
         [ a
-            [ classList [ ( "selected", (model.filter == filterState) ) ]
+            [ classList
+                [ ( "selected", (model.filter == filterState) ) ]
             , href "#"
             , onClick (Filter filterState)
             ]
@@ -170,9 +215,13 @@ filteredTodos model =
 view : Model -> Html Msg
 view model =
     div []
-        [ node "style" [ type_ "text/css" ] [ text styles ]
-        , section [ class "todoapp" ]
-            [ header [ class "header" ]
+        [ node "style"
+            [ type_ "text/css" ]
+            [ text styles ]
+        , section
+            [ class "todoapp" ]
+            [ header
+                [ class "header" ]
                 [ h1 [] [ text "todos" ]
                 , input
                     [ class "new-todo"
@@ -185,16 +234,20 @@ view model =
                     ]
                     []
                 ]
-            , section [ class "main" ]
-                [ ul [ class "todo-list" ]
+            , section
+                [ class "main" ]
+                [ ul
+                    [ class "todo-list" ]
                     (List.map todoView (filteredTodos model))
                 ]
-            , footer [ class "footer" ]
+            , footer
+                [ class "footer" ]
                 [ span [ class "todo-count" ]
                     [ strong [] [ text (toString (List.length (List.filter (\todo -> todo.completed == False) model.todos))) ]
                     , text " items left"
                     ]
-                , ul [ class "filters" ]
+                , ul
+                    [ class "filters" ]
                     [ filterItemView model All
                     , filterItemView model Active
                     , filterItemView model Completed
@@ -210,11 +263,31 @@ view model =
 
 
 main =
-    Html.beginnerProgram
+    Html.program
         { model = initialModel
         , update = update
         , view = view
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    storageInput SetModel
+
+
+
+-- INPUT PORTS
+
+
+port storageInput : (Model -> msg) -> Sub msg
+
+
+
+-- OUTPUT PORTS
+
+
+port storage : Model -> Cmd msg
 
 
 styles : String

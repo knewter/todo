@@ -1,0 +1,20 @@
+<html>
+  <head>
+    <title>Elm TodoMVC</title>
+  </head>
+  <body>
+    <!-- We'll load elm.js, which will be produced for us by elm-make and will
+         include our module as well as the elm runtime in general -->
+    <script type="text/javascript" src="elm.js"></script>
+    <script>
+      // Then we'll use `Elm.fullscreen` to load our application and have it
+      // take over the full screen.
+      var app = Elm.Main.fullscreen();
+      var currentModel = localStorage.getItem("todos");
+      app.ports.storageInput.send(JSON.parse(currentModel));
+      app.ports.storage.subscribe(function(data){
+        localStorage.setItem('todos', JSON.stringify(data));
+      });
+    </script>
+  </body>
+</html>

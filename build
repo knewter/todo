@@ -1,0 +1,3 @@
+#!/bin/bash
+
+elm make --output elm.js Main.elm
