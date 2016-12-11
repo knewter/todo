@@ -18,7 +18,6 @@ type FilterState
     = All
     | Active
     | Completed
-    | SetModel Model
 
 
 type alias Model =
@@ -36,6 +35,7 @@ type Msg
     | UpdateField String
     | Filter FilterState
     | Clear
+    | SetModel Model
 
 
 initialModel : Model
