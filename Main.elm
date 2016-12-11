@@ -4,6 +4,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
 import Json.Decode as Decode
+import Json.Encode
 
 
 type alias Todo =
@@ -36,6 +37,7 @@ type Msg
     | Filter FilterState
     | Clear
     | SetModel Model
+    | NoOp
 
 
 initialModel : Model
@@ -75,7 +77,7 @@ update msg model =
                     }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         Complete todo ->
@@ -92,7 +94,7 @@ update msg model =
                     }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         Delete todo ->
@@ -101,7 +103,7 @@ update msg model =
                     { model | todos = List.filter (\mappedTodo -> todo.identifier /= mappedTodo.identifier) model.todos }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         UpdateField str ->
@@ -116,7 +118,7 @@ update msg model =
                     { model | todo = updatedTodo }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         Filter filterState ->
@@ -125,7 +127,7 @@ update msg model =
                     { model | filter = filterState }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         Clear ->
@@ -136,11 +138,16 @@ update msg model =
                     }
             in
                 ( newModel
-                , storage newModel
+                , sendToStorage newModel
                 )
 
         SetModel newModel ->
             ( newModel
+            , Cmd.none
+            )
+
+        NoOp ->
+            ( model
             , Cmd.none
             )
 
@@ -273,21 +280,151 @@ main =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    storageInput SetModel
+    storageInput mapStorageInput
+
+
+
+-- We'll define how to encode our Model to Json.Encode.Values
+
+
+encodeJson : Model -> Json.Encode.Value
+encodeJson model =
+    -- It's a json object with a list of fields
+    Json.Encode.object
+        -- The `todos` field is a list of encoded Todos, we'll define this encodeTodo function later
+        [ ( "todos", Json.Encode.list (List.map encodeTodo model.todos) )
+          -- The current todo is also going to go through encodeTodo
+        , ( "todo", encodeTodo model.todo )
+          -- The filter gets encoded with a custom function as well
+        , ( "filter", encodeFilterState model.filter )
+          -- And the next identifier is just an int
+        , ( "nextIdentifier", Json.Encode.int model.nextIdentifier )
+        ]
+
+
+
+-- We'll define how to encode a Todo
+
+
+encodeTodo : Todo -> Json.Encode.Value
+encodeTodo todo =
+    -- It's an object with a list of fields
+    Json.Encode.object
+        -- The title is a string
+        [ ( "title", Json.Encode.string todo.title )
+          -- completed is a bool
+        , ( "completed", Json.Encode.bool todo.completed )
+          -- editing is a bool
+        , ( "editing", Json.Encode.bool todo.editing )
+          -- identifier is an int
+        , ( "identifier", Json.Encode.int todo.identifier )
+        ]
+
+
+
+-- The FilterState encoder takes a FilterState and returns a Json.Encode.Value
+
+
+encodeFilterState : FilterState -> Json.Encode.Value
+encodeFilterState filterState =
+    -- We'll use toString to turn our FilterState into a string
+    Json.Encode.string (toString filterState)
+
+
+mapStorageInput : Decode.Value -> Msg
+mapStorageInput modelJson =
+    case (decodeModel modelJson) of
+        Ok model ->
+            SetModel model
+
+        Err errorMessage ->
+            let
+                _ =
+                    Debug.log "Error in mapStorageInput:" errorMessage
+            in
+                NoOp
+
+
+decodeModel : Decode.Value -> Result String Model
+decodeModel modelJson =
+    Decode.decodeValue modelDecoder modelJson
+
+
+modelDecoder : Decode.Decoder Model
+modelDecoder =
+    Decode.map4 Model
+        -- For todos, we return a list passed through a new todoDecoder
+        (Decode.field "todos" (Decode.list todoDecoder))
+        -- The active todo also goes through the todoDecoder
+        (Decode.field "todo" todoDecoder)
+        -- The filter gets decoded as a string, then mapped to a FilterState
+        (Decode.field "filter" (Decode.string |> Decode.map filterStateDecoder))
+        -- Then nextIdentifier just uses the builtin int decoder
+        (Decode.field "nextIdentifier" Decode.int)
+
+
+todoDecoder : Decode.Decoder Todo
+todoDecoder =
+    Decode.map4 Todo
+        -- Our title is a string
+        (Decode.field "title" Decode.string)
+        -- completed is a bool
+        (Decode.field "completed" Decode.bool)
+        -- editing is a bool
+        (Decode.field "editing" Decode.bool)
+        -- and identifier is an int
+        (Decode.field "identifier" Decode.int)
+
+
+filterStateDecoder : String -> FilterState
+filterStateDecoder string =
+    case string of
+        "All" ->
+            All
+
+        "Active" ->
+            Active
+
+        "Completed" ->
+            Completed
+
+        _ ->
+            let
+                _ =
+                    Debug.log "filterStateDecoder" <|
+                        "Couldn't decode value "
+                            ++ string
+                            ++ " so defaulting to All."
+            in
+                All
+
+
+
+-- Sending to storage now just needs to encode the model to JSON before
+-- sending it out the port.
+
+
+sendToStorage : Model -> Cmd Msg
+sendToStorage model =
+    encodeJson model |> storage
 
 
 
 -- INPUT PORTS
+-- our input port gets Decode.Values into it
 
 
-port storageInput : (Model -> msg) -> Sub msg
+port storageInput : (Decode.Value -> msg) -> Sub msg
 
 
 
 -- OUTPUT PORTS
+-- We have an outbound port of Json.Encode.Values now - notice we aren't dealing
+-- with them as raw string representations ever in our Elm code.  They're still
+-- typed.
 
 
-port storage : Model -> Cmd msg
+port storage : Json.Encode.Value -> Cmd msg
 
 
 styles : String
@@ -520,7 +657,7 @@ styles =
     }
 
     .todo-list li .destroy:after {
-        content: '×';
+        content: 'x';
     }
 
     .todo-list li:hover .destroy {
