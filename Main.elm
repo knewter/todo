@@ -139,8 +139,8 @@ update msg model =
                 , storage newModel
                 )
 
-        SetModel model ->
-            ( model
+        SetModel newModel ->
+            ( newModel
             , Cmd.none
             )
 
